@@ -1,0 +1,12 @@
+node_modules/
+.codegraph/
+com.ulanzi.nanusage.ulanziPlugin/dist/
+com.ulanzi.nanusage.ulanziPlugin/package/
+*.log
+
+# Local Pi runtime state
+.atl/
+odd/
+
+# Local pi-lens config: keeps this repo free of unrelated auto-format churn
+.pi-lens.json
