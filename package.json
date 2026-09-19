@@ -1,0 +1,14 @@
+{
+  "name": "ulanzi-nan-usage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NaN usage plugin for Ulanzi D200",
+  "author": "Santiago Pérez",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node --test test/*.test.js",
+    "build": "node scripts/build.mjs",
+    "package": "npm run check && npm run test && npm run build && node scripts/package.mjs"
+  }
+}
