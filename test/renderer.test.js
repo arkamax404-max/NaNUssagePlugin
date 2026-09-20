@@ -24,6 +24,16 @@ const {
 
 const DATA_URI_PREFIX = "data:image/svg+xml;base64,";
 const VALUE_MAX_WIDTH = ROW_VALUE_X - BAR_WIDTH - 12;
+
+// The renderer keeps HEADER_SIZE internal (it is not part of the frozen export
+// list), so the test pins the design size here on purpose: the width budget has
+// to be asserted at the size the header is drawn at, not at whatever size
+// auto-fit happened to produce, or a longer header would shrink silently.
+const HEADER_SIZE = 22;
+// Glyph envelope ratios from the design document's vertical fit section: a
+// bold Arial glyph reaches 0.75em above and 0.22em below its baseline.
+const ASCENT_RATIO = 0.75;
+const DESCENT_RATIO = 0.22;
 const ELEMENT_PATTERN = /<(text|rect)\b([^>]*?)(?:\/>|>([^<]*)<\/text>)/g;
 
 const XML_NAME = "[A-Za-z_][A-Za-z0-9_.:-]*";
@@ -138,7 +148,7 @@ const THREE_ROWS = [
 test("keeps the frozen renderer constants", () => {
   assert.equal(CANVAS_SIZE, 196);
   assert.equal(TEXT_MAX_WIDTH, 168);
-  assert.equal(HEADER_TEXT, "USED");
+  assert.equal(HEADER_TEXT, "NaN - USED");
   assert.deepEqual(ROW_LABEL_Y, [64, 108, 152]);
   assert.equal(ROW_LABEL_SIZE, 20);
   assert.equal(ROW_LABEL_X, 14);
@@ -188,15 +198,25 @@ test("uses the background colour of each state", () => {
   );
 });
 
-test("draws the constant header only when there are rows", () => {
-  const header = single(decode(createUsageImage(usageView(THREE_ROWS))), "data-header");
+test("draws the plugin and metric header only when there are rows", () => {
+  const svg = decode(createUsageImage(usageView(THREE_ROWS, { footer: "RESET SEP 30" })));
+  const header = single(svg, "data-header");
+  const footer = single(svg, "data-footer");
+
   assert.equal(header.tag, "text");
-  assert.equal(header.text, "USED");
-  assert.equal(header.attributes.x, "98");
-  assert.equal(header.attributes.y, "26");
-  assert.equal(header.attributes["font-size"], "15");
+  assert.equal(header.text, "NaN - USED");
+  assert.equal(header.attributes["font-size"], String(HEADER_SIZE));
+  assert.equal(header.attributes["font-family"], "Arial, sans-serif");
+  assert.equal(header.attributes["font-weight"], "700");
   assert.equal(header.attributes.fill, "#8b949e");
+  assert.equal(header.attributes.y, "26");
+
+  // Same anchor and same anchor x as the footer, but its own baseline.
   assert.equal(header.attributes["text-anchor"], "middle");
+  assert.equal(header.attributes.x, "98");
+  assert.equal(header.attributes.x, footer.attributes.x);
+  assert.equal(header.attributes["text-anchor"], footer.attributes["text-anchor"]);
+  assert.notEqual(header.attributes.y, footer.attributes.y);
 
   for (const view of [
     { state: 3, rows: [], message: "NO QUOTA", footer: "" },
@@ -204,6 +224,51 @@ test("draws the constant header only when there are rows", () => {
   ]) {
     assert.equal(decode(createUsageImage(view)).includes("data-header"), false);
   }
+});
+
+test("spells the header with one plain hyphen between single spaces", () => {
+  assert.equal(HEADER_TEXT, "NaN - USED");
+  assert.deepEqual(HEADER_TEXT.split(" - "), ["NaN", "USED"]);
+  assert.equal(HEADER_TEXT.match(/-/g).length, 1);
+  for (const separator of ["\u2010", "\u2011", "\u2012", "\u2013", "\u2014", "\u2015", "\u2212", "_", "/", "|"]) {
+    assert.equal(HEADER_TEXT.includes(separator), false, `${separator} is not the frozen separator`);
+  }
+  assert.equal(HEADER_TEXT, HEADER_TEXT.trim());
+});
+
+test("measures the header inside the safe width at its design size", () => {
+  const width = estimateTextWidth(HEADER_TEXT, HEADER_SIZE);
+  assert.ok(Math.abs(width - 124.674) < 1e-9);
+  assert.ok(width <= TEXT_MAX_WIDTH);
+  assert.ok(Math.abs(TEXT_MAX_WIDTH - width - 43.326) < 1e-9);
+
+  const header = single(decode(createUsageImage(usageView(THREE_ROWS))), "data-header");
+  assert.equal(header.attributes["font-size"], String(HEADER_SIZE));
+  assert.equal(estimateTextWidth(header.text, HEADER_SIZE), width);
+
+  // Negative control: the budget has to bite for a longer header, otherwise a
+  // copy change would silently shrink the header instead of failing the suite.
+  assert.ok(estimateTextWidth(`${HEADER_TEXT} EXTRA`, HEADER_SIZE) > TEXT_MAX_WIDTH);
+});
+
+test("keeps the taller header clear of the first row label", () => {
+  const svg = decode(createUsageImage(usageView(THREE_ROWS)));
+  const header = single(svg, "data-header");
+  const label = single(svg, "data-row-label", 0);
+  const headerY = Number(header.attributes.y);
+  const headerSize = Number(header.attributes["font-size"]);
+  const labelY = Number(label.attributes.y);
+  const labelSize = Number(label.attributes["font-size"]);
+
+  const headerTop = headerY - ASCENT_RATIO * headerSize;
+  const headerBottom = headerY + DESCENT_RATIO * headerSize;
+  const labelTop = labelY - ASCENT_RATIO * labelSize;
+
+  assert.equal(headerTop, 9.5);
+  assert.ok(Math.abs(headerBottom - 30.84) < 1e-9);
+  assert.equal(labelTop, 49);
+  assert.ok(Math.abs(labelTop - headerBottom - 18.16) < 1e-9);
+  assert.ok(headerBottom < labelTop);
 });
 
 test("draws one label, track, fill and value per row", () => {
@@ -430,7 +495,7 @@ test("never throws for a malformed view", () => {
 
 test("keeps the fitted font size inside the safe text width", () => {
   assert.equal(fitFontSize("USED", 15), 15);
-  assert.equal(fitFontSize(HEADER_TEXT, 15), 15);
+  assert.equal(fitFontSize(HEADER_TEXT, HEADER_SIZE), HEADER_SIZE);
   assert.equal(estimateTextWidth("", 20), 0);
   const fitted = fitFontSize("glm5.3-flash-ultra-long-name", ROW_LABEL_SIZE, 100);
   assert.ok(fitted < ROW_LABEL_SIZE);

@@ -8,9 +8,9 @@ const BACKGROUNDS = Object.freeze({
   3: "#341216",
 });
 
-const HEADER_TEXT = "USED";
+const HEADER_TEXT = "NaN - USED";
 const HEADER_Y = 26;
-const HEADER_SIZE = 15;
+const HEADER_SIZE = 22;
 const HEADER_FILL = "#8b949e";
 
 const ROW_LABEL_Y = Object.freeze([64, 108, 152]);
