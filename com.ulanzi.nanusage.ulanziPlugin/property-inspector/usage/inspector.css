@@ -1,0 +1,13 @@
+body { margin: 0; background: #15171a; color: #f4f4f4; font: 14px system-ui, sans-serif; }
+main { padding: 16px; }
+h1 { margin: 0 0 12px; font-size: 18px; }
+label { display: grid; gap: 6px; margin: 12px 0; }
+fieldset { border: 1px solid #30363d; border-radius: 6px; margin: 12px 0; padding: 8px 12px; }
+legend { color: #b8bec7; font-size: 12px; padding: 0 4px; }
+#models { display: grid; gap: 4px; }
+label.choice { display: flex; align-items: center; gap: 8px; margin: 0; }
+input { box-sizing: border-box; min-height: 32px; padding: 5px; }
+input[type="checkbox"] { min-height: 0; padding: 0; }
+button { min-height: 32px; }
+output { display: block; color: #9dd4ff; margin-top: 14px; }
+.note { color: #b8bec7; font-size: 12px; line-height: 1.4; }

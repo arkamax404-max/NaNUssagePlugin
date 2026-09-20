@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NaN Usage settings</title>
+    <link rel="stylesheet" href="inspector.css" />
+  </head>
+  <body>
+    <main>
+      <h1>NaN Usage</h1>
+      <p>Enter a NaN API key that can read your subscription usage.</p>
+      <form id="settings">
+        <label>NaN API key
+          <input name="nanApiKey" type="password" autocomplete="off" spellcheck="false" />
+        </label>
+        <fieldset>
+          <legend>Models shown</legend>
+          <div id="models"></div>
+        </fieldset>
+        <button id="clear-key" type="button">Clear saved key</button>
+        <output id="key-status" role="status"></output>
+        <output id="status" role="status">Connecting…</output>
+      </form>
+      <p class="note">The key is stored by UlanziStudio with this key. It is masked here and sent only to cloud-api.nan.builders.</p>
+    </main>
+    <script src="../lib/host-api.js"></script>
+    <script src="inspector.js"></script>
+  </body>
+</html>
