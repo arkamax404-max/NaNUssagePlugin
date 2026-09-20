@@ -13,17 +13,28 @@ const HEADER_Y = 26;
 const HEADER_SIZE = 22;
 const HEADER_FILL = "#8b949e";
 
-const ROW_LABEL_Y = Object.freeze([64, 108, 152]);
-const ROW_LABEL_SIZE = 20;
+const PANEL_X = 6;
+const PANEL_WIDTH = 184;
+const PANEL_RADIUS = 8;
+const PANEL_HEIGHT = 44;
+const PANEL_Y = Object.freeze([35, 82, 129]);
+// A state without a panel fill renders no panel at all: an unavailable key has
+// no consumption to frame, and `fill="undefined"` is a blank key.
+const PANEL_FILLS = Object.freeze({ 1: "#161b22", 2: "#4a3200" });
+
 const ROW_LABEL_X = 14;
+const ROW_LABEL_OFFSET = 17;
+const ROW_LABEL_SIZE = 20;
 const ROW_LABEL_FILL = "#c9d1d9";
 const ROW_VALUE_X = 182;
+const ROW_VALUE_OFFSET = 40;
+const ROW_VALUE_BASELINE = Object.freeze(PANEL_Y.map((panelY) => panelY + ROW_VALUE_OFFSET));
 const ROW_VALUE_SIZE = 22;
 const ROW_VALUE_FILL = "#ffffff";
 
-const BAR_OFFSET = 12;
-const BAR_HEIGHT = 7;
-const BAR_WIDTH = 113;
+const BAR_OFFSET = 26;
+const BAR_HEIGHT = 12;
+const BAR_WIDTH = 99;
 const BAR_TRACK = "#30363d";
 const BAR_FILL = "#58a6ff";
 
@@ -37,7 +48,7 @@ const MESSAGE_FILL = "#f0a0a8";
 
 // The value sits on the bar's line, so the room left of ROW_VALUE_X after the
 // bar and a 12px breathing gap is its hard budget.
-const VALUE_MAX_WIDTH = ROW_VALUE_X - BAR_WIDTH - 12;
+const VALUE_MAX_WIDTH = ROW_VALUE_X - ROW_LABEL_X - BAR_WIDTH - 12;
 
 const FONT_FAMILY = "Arial, sans-serif";
 const FONT_WEIGHT = 700;
@@ -129,10 +140,10 @@ function createUsageImage(view) {
 function buildSvg(view) {
   const rows = (Array.isArray(view.rows) ? view.rows : [])
     .filter((row) => row && typeof row === "object")
-    .slice(0, ROW_LABEL_Y.length);
+    .slice(0, PANEL_Y.length);
   const body = [
     rows.length > 0 ? createHeader() : "",
-    rows.map((row, index) => createRow(row, index)).join(""),
+    rows.map((row, index) => createRow(row, index, view.state)).join(""),
     rows.length === 0 ? createMessage(view.message) : "",
     createFooter(view.footer),
   ].join("");
@@ -144,23 +155,31 @@ function createHeader() {
   return `<text data-header="1" x="${TEXT_ANCHOR_X}" y="${HEADER_Y}" fill="${HEADER_FILL}" font-family="${FONT_FAMILY}" font-size="${size}" font-weight="${FONT_WEIGHT}" text-anchor="middle">${escapeXml(HEADER_TEXT)}</text>`;
 }
 
-function createRow(row, index) {
-  const labelY = ROW_LABEL_Y[index];
-  const barY = labelY + BAR_OFFSET;
+function createRow(row, index, state) {
+  const panelY = PANEL_Y[index];
+  const labelY = panelY + ROW_LABEL_OFFSET;
+  const barY = panelY + BAR_OFFSET;
+  const valueY = ROW_VALUE_BASELINE[index];
   const labelSize = Math.min(ROW_LABEL_SIZE, fitFontSize(String(row.label), ROW_LABEL_SIZE, TEXT_MAX_WIDTH));
   const valueText = `${String(row.percent)}%`;
   const valueSize = Math.min(ROW_VALUE_SIZE, fitFontSize(valueText, ROW_VALUE_SIZE, VALUE_MAX_WIDTH));
+  const panel = createPanel(index, panelY, state);
   const label = `<text data-row-label="${index}" x="${ROW_LABEL_X}" y="${labelY}" fill="${ROW_LABEL_FILL}" font-family="${FONT_FAMILY}" font-size="${labelSize}" font-weight="${FONT_WEIGHT}" text-anchor="start">${escapeXml(String(row.label))}</text>`;
-  const track = `<rect data-row-bar-track="${index}" x="0" y="${barY}" width="${BAR_WIDTH}" height="${BAR_HEIGHT}" fill="${BAR_TRACK}"/>`;
-  const value = `<text data-row-value="${index}" x="${ROW_VALUE_X}" y="${barY + BAR_HEIGHT}" fill="${ROW_VALUE_FILL}" font-family="${FONT_FAMILY}" font-size="${valueSize}" font-weight="${FONT_WEIGHT}" text-anchor="end">${escapeXml(valueText)}</text>`;
-  return `${label}${track}${createBarFill(row.consumedPercent, index, barY)}${value}`;
+  const track = `<rect data-row-bar-track="${index}" x="${ROW_LABEL_X}" y="${barY}" width="${BAR_WIDTH}" height="${BAR_HEIGHT}" fill="${BAR_TRACK}"/>`;
+  const value = `<text data-row-value="${index}" x="${ROW_VALUE_X}" y="${valueY}" fill="${ROW_VALUE_FILL}" font-family="${FONT_FAMILY}" font-size="${valueSize}" font-weight="${FONT_WEIGHT}" text-anchor="end">${escapeXml(valueText)}</text>`;
+  return `${panel}${label}${track}${createBarFill(row.consumedPercent, index, barY)}${value}`;
+}
+
+function createPanel(index, y, state) {
+  if (!Object.hasOwn(PANEL_FILLS, state)) return "";
+  return `<rect data-row-panel="${index}" x="${PANEL_X}" y="${y}" width="${PANEL_WIDTH}" height="${PANEL_HEIGHT}" rx="${PANEL_RADIUS}" fill="${PANEL_FILLS[state]}"/>`;
 }
 
 function createBarFill(consumedPercent, index, y) {
   if (!Number.isFinite(consumedPercent)) return "";
   const consumed = Math.max(0, Math.min(100, consumedPercent));
   const width = Number((BAR_WIDTH * consumed / 100).toFixed(3));
-  return `<rect data-row-bar-fill="${index}" x="0" y="${y}" width="${width}" height="${BAR_HEIGHT}" fill="${BAR_FILL}"/>`;
+  return `<rect data-row-bar-fill="${index}" x="${ROW_LABEL_X}" y="${y}" width="${width}" height="${BAR_HEIGHT}" fill="${BAR_FILL}"/>`;
 }
 
 function createMessage(message) {
@@ -219,9 +238,15 @@ module.exports = {
   FOOTER_Y,
   HEADER_TEXT,
   MESSAGE_Y,
+  PANEL_FILLS,
+  PANEL_HEIGHT,
+  PANEL_RADIUS,
+  PANEL_WIDTH,
+  PANEL_X,
+  PANEL_Y,
   ROW_LABEL_SIZE,
   ROW_LABEL_X,
-  ROW_LABEL_Y,
+  ROW_VALUE_BASELINE,
   ROW_VALUE_SIZE,
   ROW_VALUE_X,
   TEXT_MAX_WIDTH,

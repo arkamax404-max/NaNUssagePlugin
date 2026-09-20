@@ -14,16 +14,24 @@ const {
   FOOTER_Y,
   HEADER_TEXT,
   MESSAGE_Y,
+  PANEL_FILLS,
+  PANEL_HEIGHT,
+  PANEL_RADIUS,
+  PANEL_WIDTH,
+  PANEL_X,
+  PANEL_Y,
   ROW_LABEL_SIZE,
   ROW_LABEL_X,
-  ROW_LABEL_Y,
+  ROW_VALUE_BASELINE,
   ROW_VALUE_SIZE,
   ROW_VALUE_X,
   TEXT_MAX_WIDTH,
 } = require("../src/plugin/usage-image-renderer.js");
 
 const DATA_URI_PREFIX = "data:image/svg+xml;base64,";
-const VALUE_MAX_WIDTH = ROW_VALUE_X - BAR_WIDTH - 12;
+// The bar starts at ROW_LABEL_X and the value is end-anchored at ROW_VALUE_X, so
+// the room left after the bar and a 12px breathing gap is the value's budget.
+const VALUE_MAX_WIDTH = ROW_VALUE_X - ROW_LABEL_X - BAR_WIDTH - 12;
 
 // The renderer keeps HEADER_SIZE internal (it is not part of the frozen export
 // list), so the test pins the design size here on purpose: the width budget has
@@ -149,25 +157,42 @@ test("keeps the frozen renderer constants", () => {
   assert.equal(CANVAS_SIZE, 196);
   assert.equal(TEXT_MAX_WIDTH, 168);
   assert.equal(HEADER_TEXT, "NaN - USED");
-  assert.deepEqual(ROW_LABEL_Y, [64, 108, 152]);
   assert.equal(ROW_LABEL_SIZE, 20);
   assert.equal(ROW_LABEL_X, 14);
   assert.equal(ROW_VALUE_X, 182);
   assert.equal(ROW_VALUE_SIZE, 22);
-  assert.equal(BAR_OFFSET, 12);
-  assert.equal(BAR_HEIGHT, 7);
-  assert.equal(BAR_WIDTH, 113);
+  assert.equal(BAR_OFFSET, 26);
+  assert.equal(BAR_HEIGHT, 12);
+  assert.equal(BAR_WIDTH, 99);
   assert.equal(FOOTER_Y, 188);
   assert.equal(MESSAGE_Y, 101);
   assert.deepEqual(BACKGROUNDS, { 1: "#0d1117", 2: "#3b2600", 3: "#341216" });
 });
 
-test("keeps a twelve pixel clearance between the widest value and the full bar", () => {
-  const baseline = ROW_LABEL_Y.map((y) => y + BAR_OFFSET + BAR_HEIGHT);
-  assert.deepEqual(baseline, [83, 127, 171]);
+test("keeps the frozen panel geometry", () => {
+  assert.deepEqual(PANEL_Y, [35, 82, 129]);
+  assert.equal(PANEL_HEIGHT, 44);
+  assert.equal(PANEL_X, 6);
+  assert.equal(PANEL_WIDTH, 184);
+  assert.equal(PANEL_RADIUS, 8);
+  assert.deepEqual(PANEL_FILLS, { 1: "#161b22", 2: "#4a3200" });
+  // The panels span 35-79, 82-126 and 129-173.
+  assert.deepEqual(PANEL_Y.map((y) => y + PANEL_HEIGHT), [79, 126, 173]);
+  // ROW_VALUE_BASELINE is PANEL_Y + 40, and the label baseline is PANEL_Y + 17.
+  assert.deepEqual(ROW_VALUE_BASELINE, [75, 122, 169]);
+  assert.deepEqual(PANEL_Y.map((y) => y + 40), ROW_VALUE_BASELINE);
+  assert.deepEqual(PANEL_Y.map((y) => y + 17), [52, 99, 146]);
+});
+
+test("keeps a twelve pixel clearance between the widest value and the narrowed bar", () => {
   const widest = estimateTextWidth("100%", ROW_VALUE_SIZE);
   assert.ok(Math.abs(widest - 56.254) < 1e-9);
-  assert.ok(BAR_WIDTH + widest <= ROW_VALUE_X - 12);
+  const valueLeftEdge = ROW_VALUE_X - widest;
+  assert.ok(Math.abs(valueLeftEdge - 125.746) < 1e-9);
+  const barRightEdge = ROW_LABEL_X + BAR_WIDTH;
+  assert.equal(barRightEdge, 113);
+  assert.ok(Math.abs(valueLeftEdge - barRightEdge - 12.746) < 1e-9);
+  assert.ok(barRightEdge + widest <= ROW_VALUE_X - 12);
   assert.equal(VALUE_MAX_WIDTH, 57);
 });
 
@@ -251,12 +276,14 @@ test("measures the header inside the safe width at its design size", () => {
   assert.ok(estimateTextWidth(`${HEADER_TEXT} EXTRA`, HEADER_SIZE) > TEXT_MAX_WIDTH);
 });
 
-test("keeps the taller header clear of the first row label", () => {
+test("keeps the taller header clear of the first panel", () => {
   const svg = decode(createUsageImage(usageView(THREE_ROWS)));
   const header = single(svg, "data-header");
+  const panel = single(svg, "data-row-panel", 0);
   const label = single(svg, "data-row-label", 0);
   const headerY = Number(header.attributes.y);
   const headerSize = Number(header.attributes["font-size"]);
+  const panelTop = Number(panel.attributes.y);
   const labelY = Number(label.attributes.y);
   const labelSize = Number(label.attributes["font-size"]);
 
@@ -266,37 +293,48 @@ test("keeps the taller header clear of the first row label", () => {
 
   assert.equal(headerTop, 9.5);
   assert.ok(Math.abs(headerBottom - 30.84) < 1e-9);
-  assert.equal(labelTop, 49);
-  assert.ok(Math.abs(labelTop - headerBottom - 18.16) < 1e-9);
-  assert.ok(headerBottom < labelTop);
+  assert.equal(panelTop, 35);
+  assert.ok(Math.abs(panelTop - headerBottom - 4.16) < 1e-9);
+  assert.equal(labelTop, 37);
+  assert.ok(headerBottom < panelTop);
+  assert.ok(panelTop < labelTop);
 });
 
-test("draws one label, track, fill and value per row", () => {
+test("draws a panel, label, track, fill and value per row", () => {
   const svg = decode(createUsageImage(usageView(THREE_ROWS)));
-  for (let index = 0; index < ROW_LABEL_Y.length; index += 1) {
+  for (let index = 0; index < PANEL_Y.length; index += 1) {
+    const panel = single(svg, "data-row-panel", index);
     const label = single(svg, "data-row-label", index);
     const track = single(svg, "data-row-bar-track", index);
     const fill = single(svg, "data-row-bar-fill", index);
     const value = single(svg, "data-row-value", index);
-    const labelY = ROW_LABEL_Y[index];
-    const barY = labelY + BAR_OFFSET;
+    const panelY = PANEL_Y[index];
+    const barY = panelY + BAR_OFFSET;
+
+    assert.equal(panel.tag, "rect");
+    assert.equal(panel.attributes.x, String(PANEL_X));
+    assert.equal(panel.attributes.y, String(panelY));
+    assert.equal(panel.attributes.width, String(PANEL_WIDTH));
+    assert.equal(panel.attributes.height, String(PANEL_HEIGHT));
+    assert.equal(panel.attributes.rx, String(PANEL_RADIUS));
+    assert.equal(panel.attributes.fill, PANEL_FILLS[1]);
 
     assert.equal(label.tag, "text");
     assert.equal(label.attributes.x, String(ROW_LABEL_X));
-    assert.equal(label.attributes.y, String(labelY));
+    assert.equal(label.attributes.y, String(panelY + 17));
     assert.equal(label.attributes["text-anchor"], "start");
     assert.equal(label.attributes.fill, "#c9d1d9");
     assert.equal(label.text, THREE_ROWS[index].label);
 
     assert.equal(track.tag, "rect");
-    assert.equal(track.attributes.x, "0");
+    assert.equal(track.attributes.x, String(ROW_LABEL_X));
     assert.equal(track.attributes.y, String(barY));
     assert.equal(track.attributes.width, String(BAR_WIDTH));
     assert.equal(track.attributes.height, String(BAR_HEIGHT));
     assert.equal(track.attributes.fill, "#30363d");
 
     assert.equal(fill.tag, "rect");
-    assert.equal(fill.attributes.x, "0");
+    assert.equal(fill.attributes.x, String(ROW_LABEL_X));
     assert.equal(fill.attributes.y, String(barY));
     assert.equal(fill.attributes.width, String(Number((BAR_WIDTH * THREE_ROWS[index].consumedPercent / 100).toFixed(3))));
     assert.equal(fill.attributes.height, String(BAR_HEIGHT));
@@ -304,13 +342,141 @@ test("draws one label, track, fill and value per row", () => {
 
     assert.equal(value.tag, "text");
     assert.equal(value.attributes.x, String(ROW_VALUE_X));
-    assert.equal(value.attributes.y, String(barY + BAR_HEIGHT));
+    assert.equal(value.attributes.y, String(panelY + 40));
     assert.equal(value.attributes["text-anchor"], "end");
     assert.equal(value.attributes.fill, "#ffffff");
     assert.equal(value.text, `${THREE_ROWS[index].percent}%`);
   }
 
   assert.equal(byHook(svg, "data-row-label", 3).length, 0);
+});
+
+test("draws a rounded panel per row at the frozen geometry", () => {
+  const svg = decode(createUsageImage(usageView(THREE_ROWS)));
+  assert.deepEqual(
+    byHook(svg, "data-row-panel").map((panel) => panel.attributes.y),
+    ["35", "82", "129"],
+  );
+  for (const panel of byHook(svg, "data-row-panel")) {
+    assert.equal(panel.tag, "rect");
+    assert.equal(panel.attributes.x, "6");
+    assert.equal(panel.attributes.width, "184");
+    assert.equal(panel.attributes.height, "44");
+    assert.equal(panel.attributes.rx, "8");
+  }
+  assert.equal(byHook(svg, "data-row-panel", 3).length, 0);
+});
+
+test("fills the panel from the state and draws none for a state without a fill", () => {
+  const stateOne = decode(createUsageImage(usageView(THREE_ROWS)));
+  assert.deepEqual(
+    byHook(stateOne, "data-row-panel").map((panel) => panel.attributes.fill),
+    ["#161b22", "#161b22", "#161b22"],
+  );
+
+  const stateTwo = decode(createUsageImage({ state: 2, rows: THREE_ROWS, message: null, footer: "" }));
+  assert.deepEqual(
+    byHook(stateTwo, "data-row-panel").map((panel) => panel.attributes.fill),
+    ["#4a3200", "#4a3200", "#4a3200"],
+  );
+  assert.equal(stateTwo.includes('fill="#161b22"'), false);
+
+  // State 3 has no fill entry, so even a defensive row list must render no panel
+  // at all rather than fill="undefined"; the rows themselves still render.
+  const stateThree = decode(createUsageImage({ state: 3, rows: THREE_ROWS, message: null, footer: "" }));
+  assert.equal(stateThree.includes("data-row-panel"), false);
+  assert.equal(stateThree.includes("undefined"), false);
+  assert.equal(byHook(stateThree, "data-row-label").length, 3);
+  assert.equal(byHook(stateThree, "data-row-bar-track").length, 3);
+});
+
+test("draws no panel or bar in the unavailable states", () => {
+  for (const view of [
+    { state: 3, rows: [], message: "NO QUOTA", footer: "" },
+    { state: 3, rows: [], message: "NO QUOTA", footer: "RESET SEP 30" },
+    { state: 1, rows: [], message: "NO QUOTA", footer: "" },
+    { state: 2, rows: [], message: "NO QUOTA", footer: "" },
+  ]) {
+    const svg = decode(createUsageImage(view));
+    assert.equal(svg.includes("data-row-panel"), false);
+    assert.equal(svg.includes("data-row-bar"), false);
+    assert.equal(svg.includes("data-row-label"), false);
+  }
+});
+
+test("thickens the bar to twelve pixels inside the panel", () => {
+  assert.equal(BAR_HEIGHT, 12);
+  const svg = decode(createUsageImage(usageView(THREE_ROWS)));
+  for (let index = 0; index < PANEL_Y.length; index += 1) {
+    const barY = PANEL_Y[index] + BAR_OFFSET;
+    const track = single(svg, "data-row-bar-track", index);
+    const fill = single(svg, "data-row-bar-fill", index);
+
+    assert.equal(barY, [61, 108, 155][index]);
+    assert.equal(track.attributes.x, String(ROW_LABEL_X));
+    assert.equal(track.attributes.y, String(barY));
+    assert.equal(track.attributes.width, String(BAR_WIDTH));
+    assert.equal(track.attributes.height, "12");
+    assert.equal(track.attributes.fill, "#30363d");
+
+    assert.equal(fill.attributes.x, String(ROW_LABEL_X));
+    assert.equal(fill.attributes.y, String(barY));
+    assert.equal(fill.attributes.height, "12");
+    assert.equal(fill.attributes.fill, "#58a6ff");
+
+    // The bar stays inside its own panel.
+    assert.ok(Number(track.attributes.y) >= PANEL_Y[index]);
+    assert.ok(Number(track.attributes.y) + Number(track.attributes.height) <= PANEL_Y[index] + PANEL_HEIGHT);
+  }
+});
+
+test("emits the panel, label, track, fill and value in that order per row", () => {
+  const svg = decode(createUsageImage(usageView(THREE_ROWS)));
+  const attributes = [...svg.matchAll(/data-row-[a-z-]+="\d"/g)].map((match) => match[0]);
+  const expected = [];
+  for (let index = 0; index < PANEL_Y.length; index += 1) {
+    expected.push(
+      `data-row-panel="${index}"`,
+      `data-row-label="${index}"`,
+      `data-row-bar-track="${index}"`,
+      `data-row-bar-fill="${index}"`,
+      `data-row-value="${index}"`,
+    );
+  }
+  assert.deepEqual(attributes, expected);
+});
+
+test("keeps the row content inside its forty-four pixel panel", () => {
+  const svg = decode(createUsageImage(usageView(THREE_ROWS, { footer: "RESET SEP 30" })));
+  const footer = single(svg, "data-footer");
+  const footerCeiling = Number(footer.attributes.y) - ASCENT_RATIO * Number(footer.attributes["font-size"]);
+
+  const labelY = Number(single(svg, "data-row-label", 0).attributes.y);
+  const labelTop = labelY - ASCENT_RATIO * ROW_LABEL_SIZE;
+  const labelBottom = labelY + DESCENT_RATIO * ROW_LABEL_SIZE;
+  const barTop = Number(single(svg, "data-row-bar-track", 0).attributes.y);
+  const barBottom = barTop + BAR_HEIGHT;
+  const valueY = Number(single(svg, "data-row-value", 0).attributes.y);
+  const valueTop = valueY - ASCENT_RATIO * ROW_VALUE_SIZE;
+
+  assert.equal(labelTop, 37);
+  assert.ok(Math.abs(labelBottom - 56.4) < 1e-9);
+  assert.equal(barTop, 61);
+  assert.equal(barBottom, 73);
+  assert.ok(Math.abs(valueTop - 58.5) < 1e-9);
+  assert.equal(valueY, 75);
+
+  assert.ok(labelTop > PANEL_Y[0]);
+  assert.ok(barTop > labelBottom);
+  assert.ok(valueY < PANEL_Y[0] + PANEL_HEIGHT);
+  // The value shares the bar's line: its centre sits on the bar's centre.
+  assert.ok(Math.abs((valueTop + valueY) / 2 - (barTop + barBottom) / 2) <= 0.25);
+
+  const lastPanelBottom = PANEL_Y[2] + PANEL_HEIGHT;
+  assert.equal(lastPanelBottom, 173);
+  assert.ok(Math.abs(footerCeiling - 176.75) < 1e-9);
+  assert.ok(Math.abs(footerCeiling - lastPanelBottom - 3.75) < 1e-9);
+  assert.ok(lastPanelBottom < footerCeiling);
 });
 
 test("renames the percentage hook to data-row-value and drops data-row-percent", () => {
@@ -323,11 +489,11 @@ test("renames the percentage hook to data-row-value and drops data-row-percent",
 test("sizes the bar fill from the exact consumed percentage", () => {
   const cases = [
     [0, "0"],
-    [8.1, "9.153"],
-    [1.3, "1.469"],
-    [91.9, "103.847"],
-    [33.333, "37.666"],
-    [100, "113"],
+    [8.1, "8.019"],
+    [1.3, "1.287"],
+    [91.9, "90.981"],
+    [33.333, "33"],
+    [100, "99"],
   ];
   for (const [consumedPercent, expectedWidth] of cases) {
     const svg = decode(
@@ -335,14 +501,14 @@ test("sizes the bar fill from the exact consumed percentage", () => {
     );
     const fill = single(svg, "data-row-bar-fill", 0);
     assert.equal(fill.attributes.width, expectedWidth);
-    assert.equal(fill.attributes.x, "0");
-    assert.equal(fill.attributes.y, String(ROW_LABEL_Y[0] + BAR_OFFSET));
+    assert.equal(fill.attributes.x, String(ROW_LABEL_X));
+    assert.equal(fill.attributes.y, String(PANEL_Y[0] + BAR_OFFSET));
   }
 });
 
 test("clamps the bar fill to the display range", () => {
   const over = single(decode(createUsageImage(usageView([row("m", "m", 100, 140.6, 50)]))), "data-row-bar-fill", 0);
-  assert.equal(over.attributes.width, "113");
+  assert.equal(over.attributes.width, "99");
 
   const below = single(decode(createUsageImage(usageView([row("m", "m", 0, -20, 50)]))), "data-row-bar-fill", 0);
   assert.equal(below.attributes.width, "0");
@@ -361,12 +527,31 @@ test("carries the rounded integer percentage on the bar's line", () => {
   const svg = decode(createUsageImage(usageView([row("glm5.3", "glm5.3", 8, 8.1, 91.9)])));
   const value = single(svg, "data-row-value", 0);
   assert.equal(value.text, "8%");
-  assert.equal(value.attributes.y, "83");
+  assert.equal(value.attributes.y, String(ROW_VALUE_BASELINE[0]));
+  assert.equal(value.attributes.y, "75");
   assert.equal(value.attributes["font-size"], String(ROW_VALUE_SIZE));
 
   const hundred = single(decode(createUsageImage(usageView([row("m", "m", 100, 99.9, 0.1)]))), "data-row-value", 0);
   assert.equal(hundred.text, "100%");
   assert.equal(hundred.attributes["font-size"], String(ROW_VALUE_SIZE));
+});
+
+test("puts every value on its panel's baseline and every label on its own line", () => {
+  const svg = decode(createUsageImage(usageView(THREE_ROWS)));
+  assert.deepEqual(
+    byHook(svg, "data-row-value").map((value) => value.attributes.y),
+    ["75", "122", "169"],
+  );
+  assert.deepEqual(
+    byHook(svg, "data-row-label").map((label) => label.attributes.y),
+    ["52", "99", "146"],
+  );
+  for (const value of byHook(svg, "data-row-value")) {
+    assert.equal(value.attributes["font-size"], String(ROW_VALUE_SIZE));
+  }
+  for (const label of byHook(svg, "data-row-label")) {
+    assert.equal(label.attributes["font-size"], String(ROW_LABEL_SIZE));
+  }
 });
 
 test("defensively fits the value inside the clearance margin", () => {
