@@ -35,8 +35,15 @@ for (const asset of [
   "property-inspector/usage/inspector.css", "property-inspector/usage/inspector.js",
   "property-inspector/lib/host-api.js",
 ]) if (!existsSync(new URL(asset, pluginRoot))) throw new Error(`Package file is missing: ${asset}`);
-if (existsSync(new URL("assets/plugin.png", pluginRoot)) && readFileSync(new URL("assets/plugin.png", pluginRoot)).subarray(1, 4).toString("ascii") !== "PNG")
-  throw new Error("Generated plugin.png is not a valid PNG signature");
+for (const asset of [
+  manifest.Icon, manifest.CategoryIcon, ...manifest.Banner, action.Icon,
+  ...action.States.map((state) => state.Image),
+]) {
+  const imageUrl = new URL(asset, pluginRoot);
+  if (!existsSync(imageUrl)) throw new Error(`Manifest image is missing: ${asset}`);
+  if (readFileSync(imageUrl).subarray(1, 4).toString("ascii") !== "PNG")
+    throw new Error(`Manifest image is not a valid PNG: ${asset}`);
+}
 
 const packageMetadata = parseJson(new URL("package.json", root), "package.json");
 const packageLock = parseJson(new URL("package-lock.json", root), "package-lock.json");
