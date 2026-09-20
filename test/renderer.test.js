@@ -175,7 +175,7 @@ test("keeps the frozen panel geometry", () => {
   assert.equal(PANEL_X, 6);
   assert.equal(PANEL_WIDTH, 184);
   assert.equal(PANEL_RADIUS, 8);
-  assert.deepEqual(PANEL_FILLS, { 1: "#161b22", 2: "#4a3200" });
+  assert.deepEqual(PANEL_FILLS, { 1: "#21262d", 2: "#5a3e00" });
   // The panels span 35-79, 82-126 and 129-173.
   assert.deepEqual(PANEL_Y.map((y) => y + PANEL_HEIGHT), [79, 126, 173]);
   // ROW_VALUE_BASELINE is PANEL_Y + 40, and the label baseline is PANEL_Y + 17.
@@ -371,15 +371,15 @@ test("fills the panel from the state and draws none for a state without a fill",
   const stateOne = decode(createUsageImage(usageView(THREE_ROWS)));
   assert.deepEqual(
     byHook(stateOne, "data-row-panel").map((panel) => panel.attributes.fill),
-    ["#161b22", "#161b22", "#161b22"],
+    ["#21262d", "#21262d", "#21262d"],
   );
 
   const stateTwo = decode(createUsageImage({ state: 2, rows: THREE_ROWS, message: null, footer: "" }));
   assert.deepEqual(
     byHook(stateTwo, "data-row-panel").map((panel) => panel.attributes.fill),
-    ["#4a3200", "#4a3200", "#4a3200"],
+    ["#5a3e00", "#5a3e00", "#5a3e00"],
   );
-  assert.equal(stateTwo.includes('fill="#161b22"'), false);
+  assert.equal(stateTwo.includes('fill="#21262d"'), false);
 
   // State 3 has no fill entry, so even a defensive row list must render no panel
   // at all rather than fill="undefined"; the rows themselves still render.

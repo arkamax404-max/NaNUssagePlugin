@@ -20,7 +20,7 @@ const PANEL_HEIGHT = 44;
 const PANEL_Y = Object.freeze([35, 82, 129]);
 // A state without a panel fill renders no panel at all: an unavailable key has
 // no consumption to frame, and `fill="undefined"` is a blank key.
-const PANEL_FILLS = Object.freeze({ 1: "#161b22", 2: "#4a3200" });
+const PANEL_FILLS = Object.freeze({ 1: "#21262d", 2: "#5a3e00" });
 
 const ROW_LABEL_X = 14;
 const ROW_LABEL_OFFSET = 17;
