@@ -8,7 +8,7 @@ const BACKGROUNDS = Object.freeze({
   3: "#341216",
 });
 
-const HEADER_TEXT = "REMAINING";
+const HEADER_TEXT = "USED";
 const HEADER_Y = 26;
 const HEADER_SIZE = 15;
 const HEADER_FILL = "#8b949e";
@@ -17,13 +17,13 @@ const ROW_LABEL_Y = Object.freeze([64, 108, 152]);
 const ROW_LABEL_SIZE = 20;
 const ROW_LABEL_X = 14;
 const ROW_LABEL_FILL = "#c9d1d9";
-const ROW_PERCENT_X = 182;
-const ROW_PERCENT_FILL = "#ffffff";
-const LABEL_GAP = 8;
+const ROW_VALUE_X = 182;
+const ROW_VALUE_SIZE = 22;
+const ROW_VALUE_FILL = "#ffffff";
 
 const BAR_OFFSET = 12;
 const BAR_HEIGHT = 7;
-const BAR_WIDTH = 196;
+const BAR_WIDTH = 113;
 const BAR_TRACK = "#30363d";
 const BAR_FILL = "#58a6ff";
 
@@ -34,6 +34,10 @@ const FOOTER_FILL = "#8b949e";
 const MESSAGE_Y = 101;
 const MESSAGE_SIZE = 34;
 const MESSAGE_FILL = "#f0a0a8";
+
+// The value sits on the bar's line, so the room left of ROW_VALUE_X after the
+// bar and a 12px breathing gap is its hard budget.
+const VALUE_MAX_WIDTH = ROW_VALUE_X - BAR_WIDTH - 12;
 
 const FONT_FAMILY = "Arial, sans-serif";
 const FONT_WEIGHT = 700;
@@ -141,21 +145,21 @@ function createHeader() {
 }
 
 function createRow(row, index) {
-  const y = ROW_LABEL_Y[index];
-  const barY = y + BAR_OFFSET;
-  const percentText = `${String(row.percent)}%`;
-  const percentWidth = estimateTextWidth(percentText, ROW_LABEL_SIZE);
-  const labelSize = Math.min(ROW_LABEL_SIZE, fitFontSize(String(row.label), ROW_LABEL_SIZE, TEXT_MAX_WIDTH - percentWidth - LABEL_GAP));
-  const percent = `<text data-row-percent="${index}" x="${ROW_PERCENT_X}" y="${y}" fill="${ROW_PERCENT_FILL}" font-family="${FONT_FAMILY}" font-size="${ROW_LABEL_SIZE}" font-weight="${FONT_WEIGHT}" text-anchor="end">${escapeXml(percentText)}</text>`;
-  const label = `<text data-row-label="${index}" x="${ROW_LABEL_X}" y="${y}" fill="${ROW_LABEL_FILL}" font-family="${FONT_FAMILY}" font-size="${labelSize}" font-weight="${FONT_WEIGHT}" text-anchor="start">${escapeXml(String(row.label))}</text>`;
+  const labelY = ROW_LABEL_Y[index];
+  const barY = labelY + BAR_OFFSET;
+  const labelSize = Math.min(ROW_LABEL_SIZE, fitFontSize(String(row.label), ROW_LABEL_SIZE, TEXT_MAX_WIDTH));
+  const valueText = `${String(row.percent)}%`;
+  const valueSize = Math.min(ROW_VALUE_SIZE, fitFontSize(valueText, ROW_VALUE_SIZE, VALUE_MAX_WIDTH));
+  const label = `<text data-row-label="${index}" x="${ROW_LABEL_X}" y="${labelY}" fill="${ROW_LABEL_FILL}" font-family="${FONT_FAMILY}" font-size="${labelSize}" font-weight="${FONT_WEIGHT}" text-anchor="start">${escapeXml(String(row.label))}</text>`;
   const track = `<rect data-row-bar-track="${index}" x="0" y="${barY}" width="${BAR_WIDTH}" height="${BAR_HEIGHT}" fill="${BAR_TRACK}"/>`;
-  return `${label}${percent}${track}${createBarFill(row.remainingPercent, index, barY)}`;
+  const value = `<text data-row-value="${index}" x="${ROW_VALUE_X}" y="${barY + BAR_HEIGHT}" fill="${ROW_VALUE_FILL}" font-family="${FONT_FAMILY}" font-size="${valueSize}" font-weight="${FONT_WEIGHT}" text-anchor="end">${escapeXml(valueText)}</text>`;
+  return `${label}${track}${createBarFill(row.consumedPercent, index, barY)}${value}`;
 }
 
-function createBarFill(remainingPercent, index, y) {
-  if (!Number.isFinite(remainingPercent)) return "";
-  const remaining = Math.max(0, Math.min(100, remainingPercent));
-  const width = Number((BAR_WIDTH * remaining / 100).toFixed(3));
+function createBarFill(consumedPercent, index, y) {
+  if (!Number.isFinite(consumedPercent)) return "";
+  const consumed = Math.max(0, Math.min(100, consumedPercent));
+  const width = Number((BAR_WIDTH * consumed / 100).toFixed(3));
   return `<rect data-row-bar-fill="${index}" x="0" y="${y}" width="${width}" height="${BAR_HEIGHT}" fill="${BAR_FILL}"/>`;
 }
 
@@ -218,6 +222,7 @@ module.exports = {
   ROW_LABEL_SIZE,
   ROW_LABEL_X,
   ROW_LABEL_Y,
-  ROW_PERCENT_X,
+  ROW_VALUE_SIZE,
+  ROW_VALUE_X,
   TEXT_MAX_WIDTH,
 };

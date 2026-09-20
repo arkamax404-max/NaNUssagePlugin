@@ -1,7 +1,7 @@
-function parsePercent(remaining, cap) {
-  if (!Number.isFinite(remaining) || !Number.isFinite(cap)) return null;
-  if (cap <= 0 || remaining < 0) return null;
-  return Math.max(0, Math.min(100, remaining / cap * 100));
+function parsePercent(value, cap) {
+  if (!Number.isFinite(value) || !Number.isFinite(cap)) return null;
+  if (cap <= 0 || value < 0) return null;
+  return Math.max(0, Math.min(100, value / cap * 100));
 }
 
 function normalizeQuotaPayload(payload) {
@@ -18,12 +18,15 @@ function normalizeQuotaPayload(payload) {
     seen.add(id);
     const cap = nonNegativeNumber(entry.cap);
     const remaining = nonNegativeNumber(entry.remaining);
+    const tokensUsed = nonNegativeNumber(entry.tokensUsed);
+    const remainingPercent = parsePercent(remaining, cap);
     models.push({
       id,
       cap,
-      tokensUsed: nonNegativeNumber(entry.tokensUsed),
+      tokensUsed,
       remaining,
-      remainingPercent: parsePercent(remaining, cap),
+      remainingPercent,
+      consumedPercent: consumedPercentOf(tokensUsed, cap, remainingPercent),
       updatedAt: nonEmptyString(entry.updatedAt),
       periodEnd: nonEmptyString(entry.periodEnd),
       windowHours: positiveNumber(entry.windowHours),
@@ -31,6 +34,14 @@ function normalizeQuotaPayload(payload) {
     });
   }
   return { periodStart, models };
+}
+
+// The key shows consumed quota, so the figure comes from tokensUsed when the
+// payload can support it and only falls back to the remaining complement.
+function consumedPercentOf(tokensUsed, cap, remainingPercent) {
+  const consumed = parsePercent(tokensUsed, cap);
+  if (consumed !== null) return consumed;
+  return Number.isFinite(remainingPercent) ? 100 - remainingPercent : null;
 }
 
 function nonEmptyString(value) {

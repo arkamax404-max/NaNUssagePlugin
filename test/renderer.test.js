@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const { MODEL_LABELS } = require("../src/plugin/presentation.js");
 const {
   BACKGROUNDS,
   BAR_HEIGHT,
@@ -16,12 +17,13 @@ const {
   ROW_LABEL_SIZE,
   ROW_LABEL_X,
   ROW_LABEL_Y,
-  ROW_PERCENT_X,
+  ROW_VALUE_SIZE,
+  ROW_VALUE_X,
   TEXT_MAX_WIDTH,
 } = require("../src/plugin/usage-image-renderer.js");
 
-const LABEL_GAP = 8;
 const DATA_URI_PREFIX = "data:image/svg+xml;base64,";
+const VALUE_MAX_WIDTH = ROW_VALUE_X - BAR_WIDTH - 12;
 const ELEMENT_PATTERN = /<(text|rect)\b([^>]*?)(?:\/>|>([^<]*)<\/text>)/g;
 
 const XML_NAME = "[A-Za-z_][A-Za-z0-9_.:-]*";
@@ -119,8 +121,8 @@ function single(svg, hook, value) {
   return found[0];
 }
 
-function row(modelId, label, percent, remainingPercent) {
-  return { modelId, label, percent, remainingPercent };
+function row(modelId, label, percent, consumedPercent, remainingPercent) {
+  return { modelId, label, percent, consumedPercent, remainingPercent };
 }
 
 function usageView(rows, extra = {}) {
@@ -128,25 +130,35 @@ function usageView(rows, extra = {}) {
 }
 
 const THREE_ROWS = [
-  row("glm5.3", "glm5.3", 92, 91.9),
-  row("glm5.2", "glm5.2", 75, 75),
-  row("deepseek-v4-flash", "deepseek v4", 100, 100),
+  row("deepseek-v4-flash", "deepseek v4", 8, 8.1, 91.9),
+  row("glm5.3-flash", "glm5.3 flash", 1, 1.3, 98.7),
+  row("mimo-v2.5", "mimo 2.5", 1, 1.3, 98.7),
 ];
 
 test("keeps the frozen renderer constants", () => {
   assert.equal(CANVAS_SIZE, 196);
   assert.equal(TEXT_MAX_WIDTH, 168);
-  assert.equal(HEADER_TEXT, "REMAINING");
+  assert.equal(HEADER_TEXT, "USED");
   assert.deepEqual(ROW_LABEL_Y, [64, 108, 152]);
   assert.equal(ROW_LABEL_SIZE, 20);
   assert.equal(ROW_LABEL_X, 14);
-  assert.equal(ROW_PERCENT_X, 182);
+  assert.equal(ROW_VALUE_X, 182);
+  assert.equal(ROW_VALUE_SIZE, 22);
   assert.equal(BAR_OFFSET, 12);
   assert.equal(BAR_HEIGHT, 7);
-  assert.equal(BAR_WIDTH, 196);
+  assert.equal(BAR_WIDTH, 113);
   assert.equal(FOOTER_Y, 188);
   assert.equal(MESSAGE_Y, 101);
   assert.deepEqual(BACKGROUNDS, { 1: "#0d1117", 2: "#3b2600", 3: "#341216" });
+});
+
+test("keeps a twelve pixel clearance between the widest value and the full bar", () => {
+  const baseline = ROW_LABEL_Y.map((y) => y + BAR_OFFSET + BAR_HEIGHT);
+  assert.deepEqual(baseline, [83, 127, 171]);
+  const widest = estimateTextWidth("100%", ROW_VALUE_SIZE);
+  assert.ok(Math.abs(widest - 56.254) < 1e-9);
+  assert.ok(BAR_WIDTH + widest <= ROW_VALUE_X - 12);
+  assert.equal(VALUE_MAX_WIDTH, 57);
 });
 
 test("returns null for a missing view or a state without a background", () => {
@@ -179,7 +191,7 @@ test("uses the background colour of each state", () => {
 test("draws the constant header only when there are rows", () => {
   const header = single(decode(createUsageImage(usageView(THREE_ROWS))), "data-header");
   assert.equal(header.tag, "text");
-  assert.equal(header.text, "REMAINING");
+  assert.equal(header.text, "USED");
   assert.equal(header.attributes.x, "98");
   assert.equal(header.attributes.y, "26");
   assert.equal(header.attributes["font-size"], "15");
@@ -188,95 +200,131 @@ test("draws the constant header only when there are rows", () => {
 
   for (const view of [
     { state: 3, rows: [], message: "NO QUOTA", footer: "" },
-    { state: 3, rows: [], message: "NO QUOTA", footer: "FROM SEP 1" },
+    { state: 3, rows: [], message: "NO QUOTA", footer: "RESET SEP 30" },
   ]) {
     assert.equal(decode(createUsageImage(view)).includes("data-header"), false);
   }
 });
 
-test("draws one label, percentage, track and fill per row", () => {
+test("draws one label, track, fill and value per row", () => {
   const svg = decode(createUsageImage(usageView(THREE_ROWS)));
   for (let index = 0; index < ROW_LABEL_Y.length; index += 1) {
     const label = single(svg, "data-row-label", index);
-    const percent = single(svg, "data-row-percent", index);
     const track = single(svg, "data-row-bar-track", index);
     const fill = single(svg, "data-row-bar-fill", index);
-    const y = ROW_LABEL_Y[index];
+    const value = single(svg, "data-row-value", index);
+    const labelY = ROW_LABEL_Y[index];
+    const barY = labelY + BAR_OFFSET;
 
+    assert.equal(label.tag, "text");
     assert.equal(label.attributes.x, String(ROW_LABEL_X));
-    assert.equal(label.attributes.y, String(y));
+    assert.equal(label.attributes.y, String(labelY));
     assert.equal(label.attributes["text-anchor"], "start");
     assert.equal(label.attributes.fill, "#c9d1d9");
     assert.equal(label.text, THREE_ROWS[index].label);
 
-    assert.equal(percent.attributes.x, String(ROW_PERCENT_X));
-    assert.equal(percent.attributes.y, String(y));
-    assert.equal(percent.attributes["text-anchor"], "end");
-    assert.equal(percent.attributes.fill, "#ffffff");
-    assert.equal(percent.attributes["font-size"], String(ROW_LABEL_SIZE));
-    assert.equal(percent.text, `${THREE_ROWS[index].percent}%`);
-
     assert.equal(track.tag, "rect");
     assert.equal(track.attributes.x, "0");
-    assert.equal(track.attributes.y, String(y + BAR_OFFSET));
+    assert.equal(track.attributes.y, String(barY));
     assert.equal(track.attributes.width, String(BAR_WIDTH));
     assert.equal(track.attributes.height, String(BAR_HEIGHT));
     assert.equal(track.attributes.fill, "#30363d");
 
-    assert.equal(fill.attributes.y, String(y + BAR_OFFSET));
+    assert.equal(fill.tag, "rect");
+    assert.equal(fill.attributes.x, "0");
+    assert.equal(fill.attributes.y, String(barY));
+    assert.equal(fill.attributes.width, String(Number((BAR_WIDTH * THREE_ROWS[index].consumedPercent / 100).toFixed(3))));
     assert.equal(fill.attributes.height, String(BAR_HEIGHT));
     assert.equal(fill.attributes.fill, "#58a6ff");
+
+    assert.equal(value.tag, "text");
+    assert.equal(value.attributes.x, String(ROW_VALUE_X));
+    assert.equal(value.attributes.y, String(barY + BAR_HEIGHT));
+    assert.equal(value.attributes["text-anchor"], "end");
+    assert.equal(value.attributes.fill, "#ffffff");
+    assert.equal(value.text, `${THREE_ROWS[index].percent}%`);
   }
 
   assert.equal(byHook(svg, "data-row-label", 3).length, 0);
 });
 
-test("sizes the bar fill from the exact remaining percentage", () => {
+test("renames the percentage hook to data-row-value and drops data-row-percent", () => {
+  const svg = decode(createUsageImage(usageView(THREE_ROWS)));
+  assert.equal(byHook(svg, "data-row-value").length, 3);
+  assert.equal(byHook(svg, "data-row-percent").length, 0);
+  assert.equal(svg.includes("data-row-percent"), false);
+});
+
+test("sizes the bar fill from the exact consumed percentage", () => {
   const cases = [
     [0, "0"],
-    [91.9, "180.124"],
-    [100, "196"],
-    [33.333, "65.333"],
-    [1, "1.96"],
+    [8.1, "9.153"],
+    [1.3, "1.469"],
+    [91.9, "103.847"],
+    [33.333, "37.666"],
+    [100, "113"],
   ];
-  for (const [remainingPercent, expectedWidth] of cases) {
+  for (const [consumedPercent, expectedWidth] of cases) {
     const svg = decode(
-      createUsageImage(usageView([row("glm5.3", "glm5.3", Math.round(remainingPercent), remainingPercent)])),
+      createUsageImage(usageView([row("glm5.3", "glm5.3", Math.round(consumedPercent), consumedPercent, 0)])),
     );
     const fill = single(svg, "data-row-bar-fill", 0);
     assert.equal(fill.attributes.width, expectedWidth);
     assert.equal(fill.attributes.x, "0");
+    assert.equal(fill.attributes.y, String(ROW_LABEL_Y[0] + BAR_OFFSET));
   }
 });
 
 test("clamps the bar fill to the display range", () => {
-  assert.equal(single(decode(createUsageImage(usageView([row("m", "m", 100, 140)]))), "data-row-bar-fill", 0).attributes.width, "196");
-  assert.equal(single(decode(createUsageImage(usageView([row("m", "m", 0, -20)]))), "data-row-bar-fill", 0).attributes.width, "0");
+  const over = single(decode(createUsageImage(usageView([row("m", "m", 100, 140.6, 50)]))), "data-row-bar-fill", 0);
+  assert.equal(over.attributes.width, "113");
+
+  const below = single(decode(createUsageImage(usageView([row("m", "m", 0, -20, 50)]))), "data-row-bar-fill", 0);
+  assert.equal(below.attributes.width, "0");
 });
 
-test("keeps the track without a fill when the percentage is unknown", () => {
-  for (const remainingPercent of [Number.NaN, undefined, null, Number.POSITIVE_INFINITY, "91.9"]) {
-    const svg = decode(createUsageImage(usageView([row("glm5.3", "glm5.3", 92, remainingPercent)])));
+test("keeps the track without a fill when the consumed percentage is unknown", () => {
+  for (const consumedPercent of [Number.NaN, undefined, null, Number.POSITIVE_INFINITY, "91.9"]) {
+    const svg = decode(createUsageImage(usageView([row("glm5.3", "glm5.3", 8, consumedPercent, 91.9)])));
     assert.equal(byHook(svg, "data-row-bar-fill", 0).length, 0);
     assert.equal(byHook(svg, "data-row-bar-track", 0).length, 1);
+    assert.equal(single(svg, "data-row-value", 0).text, "8%");
   }
 });
 
-test("carries the rounded percentage text", () => {
-  const svg = decode(createUsageImage(usageView([row("glm5.3", "glm5.3", 92, 91.9)])));
-  assert.equal(single(svg, "data-row-percent", 0).text, "92%");
+test("carries the rounded integer percentage on the bar's line", () => {
+  const svg = decode(createUsageImage(usageView([row("glm5.3", "glm5.3", 8, 8.1, 91.9)])));
+  const value = single(svg, "data-row-value", 0);
+  assert.equal(value.text, "8%");
+  assert.equal(value.attributes.y, "83");
+  assert.equal(value.attributes["font-size"], String(ROW_VALUE_SIZE));
+
+  const hundred = single(decode(createUsageImage(usageView([row("m", "m", 100, 99.9, 0.1)]))), "data-row-value", 0);
+  assert.equal(hundred.text, "100%");
+  assert.equal(hundred.attributes["font-size"], String(ROW_VALUE_SIZE));
+});
+
+test("defensively fits the value inside the clearance margin", () => {
+  const svg = decode(createUsageImage(usageView([row("m", "m", 1234, 8.1, 91.9)])));
+  const value = single(svg, "data-row-value", 0);
+  const size = Number(value.attributes["font-size"]);
+
+  assert.equal(value.text, "1234%");
+  assert.ok(size < ROW_VALUE_SIZE);
+  assert.ok(estimateTextWidth(value.text, size) <= VALUE_MAX_WIDTH);
 });
 
 test("draws at most three rows", () => {
-  const rows = [...THREE_ROWS, row("extra", "extra", 50, 50)];
+  const rows = [...THREE_ROWS, row("extra", "extra", 50, 50, 50)];
   const svg = decode(createUsageImage(usageView(rows)));
   assert.equal(byHook(svg, "data-row-label", 3).length, 0);
   assert.equal(byHook(svg, "data-row-bar-track", 2).length, 1);
+  assert.equal(byHook(svg, "data-row-value", 2).length, 1);
 });
 
 test("renders the footer only when it is a non-empty string", () => {
-  const footer = single(decode(createUsageImage(usageView(THREE_ROWS, { footer: "FROM SEP 1" }))), "data-footer");
-  assert.equal(footer.text, "FROM SEP 1");
+  const footer = single(decode(createUsageImage(usageView(THREE_ROWS, { footer: "RESET SEP 30" }))), "data-footer");
+  assert.equal(footer.text, "RESET SEP 30");
   assert.equal(footer.attributes.x, "98");
   assert.equal(footer.attributes.y, "188");
   assert.equal(footer.attributes["font-size"], "15");
@@ -307,21 +355,30 @@ test("renders the message only when there are no rows", () => {
   assert.equal(decode(createUsageImage({ state: 3, rows: [], message: "", footer: "" })).includes("data-message"), false);
 });
 
-test("auto-fits a long label below the row label size", () => {
-  const svg = decode(createUsageImage(usageView([row("glm5.3-flash", "glm5.3-flash-ultra-long-name", 100, 100)])));
+test("auto-fits a label that cannot fit the full safe width", () => {
+  const svg = decode(createUsageImage(usageView([row("glm5.3-flash", "glm5.3-flash-ultra-long-name", 100, 100, 0)])));
   const label = single(svg, "data-row-label", 0);
-  const percent = single(svg, "data-row-percent", 0);
   const size = Number(label.attributes["font-size"]);
-  const budget = TEXT_MAX_WIDTH - estimateTextWidth(percent.text, ROW_LABEL_SIZE) - LABEL_GAP;
 
   assert.ok(size < ROW_LABEL_SIZE);
-  assert.ok(estimateTextWidth(label.text, size) <= budget);
-  assert.ok(estimateTextWidth(percent.text, ROW_LABEL_SIZE) + LABEL_GAP + estimateTextWidth(label.text, size) <= TEXT_MAX_WIDTH);
+  assert.ok(estimateTextWidth(label.text, size) <= TEXT_MAX_WIDTH);
 });
 
-test("keeps a short label at the frozen row label size", () => {
-  const svg = decode(createUsageImage(usageView([row("glm5.3", "glm5.3", 92, 91.9)])));
-  assert.equal(single(svg, "data-row-label", 0).attributes["font-size"], String(ROW_LABEL_SIZE));
+test("never shrinks a frozen model label now that the label owns its line", () => {
+  const labels = Object.values(MODEL_LABELS);
+  const widest = labels.reduce((left, right) =>
+    estimateTextWidth(right, ROW_LABEL_SIZE) > estimateTextWidth(left, ROW_LABEL_SIZE) ? right : left);
+
+  assert.equal(widest, "deepseek v4");
+  assert.ok(Math.abs(estimateTextWidth(widest, ROW_LABEL_SIZE) - 118.96) < 1e-9);
+  assert.ok(estimateTextWidth(widest, ROW_LABEL_SIZE) <= TEXT_MAX_WIDTH);
+
+  for (const label of labels) {
+    const svg = decode(createUsageImage(usageView([row("id", label, 8, 8.1, 91.9)])));
+    const rendered = single(svg, "data-row-label", 0);
+    assert.equal(rendered.attributes["font-size"], String(ROW_LABEL_SIZE), `${label} was shrunk`);
+    assert.equal(rendered.text, label);
+  }
 });
 
 test("escapes XML-sensitive text in the label, message and footer", () => {
@@ -340,7 +397,7 @@ test("escapes XML-sensitive text in the label, message and footer", () => {
   const indented = decode(
     createUsageImage({
       state: 1,
-      rows: [row("m", `glm<5>&"'`, 50, 50)],
+      rows: [row("m", `glm<5>&"'`, 50, 50, 50)],
       message: null,
       footer: "",
     }),
@@ -360,7 +417,7 @@ test("never throws for a malformed view", () => {
     { state: 1, rows: [null, 42, "glm5.3", {}, THREE_ROWS[0]] },
     { state: 1, rows: THREE_ROWS, footer: 42, message: 42 },
     { state: 3, rows: [], message: null, footer: undefined },
-    { state: 1, rows: [{ label: {}, percent: {}, remainingPercent: {} }] },
+    { state: 1, rows: [{ label: {}, percent: {}, consumedPercent: {}, remainingPercent: {} }] },
   ];
   for (const view of views) {
     let image;
@@ -372,7 +429,8 @@ test("never throws for a malformed view", () => {
 });
 
 test("keeps the fitted font size inside the safe text width", () => {
-  assert.equal(fitFontSize("REMAINING", 15), 15);
+  assert.equal(fitFontSize("USED", 15), 15);
+  assert.equal(fitFontSize(HEADER_TEXT, 15), 15);
   assert.equal(estimateTextWidth("", 20), 0);
   const fitted = fitFontSize("glm5.3-flash-ultra-long-name", ROW_LABEL_SIZE, 100);
   assert.ok(fitted < ROW_LABEL_SIZE);
@@ -384,7 +442,10 @@ test("renders well-formed xml for every view shape the host parses", () => {
     usageView(THREE_ROWS),
     usageView(THREE_ROWS, { state: 2 }),
     { state: 3, rows: [], message: "NO QUOTA", footer: "" },
-    usageView(THREE_ROWS, { footer: "FROM SEP 1" }),
+    usageView(THREE_ROWS, { footer: "RESET SEP 30" }),
+    usageView([row("unknown", "glm5.3", 8, null, 91.9)]),
+    usageView([row("clipped", "deepseek v4", 100, 140.6, -20)]),
+    usageView([row("escaped", `a&b<c>"d"`, 8, 8.1, 91.9)], { footer: `RESET <A&B>` }),
   ];
   for (const view of views) {
     assert.doesNotThrow(() => assertWellFormedSvg(decode(createUsageImage(view))));
@@ -393,7 +454,7 @@ test("renders well-formed xml for every view shape the host parses", () => {
 
 test("rejects a valueless attribute", () => {
   const svg = '<svg xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="key-shape"/></defs>'
-    + '<text data-header x="98" y="26" fill="#8b949e">REMAINING</text></svg>';
+    + '<text data-header x="98" y="26" fill="#8b949e">USED</text></svg>';
   assert.throws(() => assertWellFormedSvg(svg), /attribute " data-header [\s\S]*of <text> is not name="value"/);
 });
 

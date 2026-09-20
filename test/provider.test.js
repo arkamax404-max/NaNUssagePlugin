@@ -13,6 +13,7 @@ const MODEL_FIELDS = [
   "tokensUsed",
   "remaining",
   "remainingPercent",
+  "consumedPercent",
   "updatedAt",
   "periodEnd",
   "windowHours",

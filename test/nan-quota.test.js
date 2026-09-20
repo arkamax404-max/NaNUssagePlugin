@@ -8,6 +8,7 @@ const MODEL_FIELDS = [
   "tokensUsed",
   "remaining",
   "remainingPercent",
+  "consumedPercent",
   "updatedAt",
   "periodEnd",
   "windowHours",
@@ -66,6 +67,117 @@ test("normalizes a realistic multi-model quota payload", () => {
   assert.equal(result.models[2].cap, 500000000);
   assert.equal(result.models[2].tokensUsed, 0);
   assert.equal(result.models[2].remainingPercent, 100);
+  assert.ok(Math.abs(result.models[0].consumedPercent - 91.9) < 1e-9);
+  assert.ok(Math.abs(result.models[1].consumedPercent - 25) < 1e-9);
+  assert.equal(result.models[2].consumedPercent, 0);
+});
+
+test("derives consumedPercent from tokensUsed and cap", () => {
+  const { models } = normalizeQuotaPayload({
+    periodStart: "2026-09-01",
+    models: [
+      { model: "exact", tokensUsed: 919000000, cap: 1000000000, remaining: 81000000 },
+      { model: "third", tokensUsed: 1, cap: 3, remaining: 2 },
+      { model: "untouched", tokensUsed: 0, cap: 1000000000, remaining: 1000000000 },
+      { model: "over", tokensUsed: 1500, cap: 1000, remaining: 0 },
+    ],
+  });
+
+  assert.ok(Math.abs(models[0].consumedPercent - 91.9) < 1e-9);
+  assert.equal(models[1].consumedPercent, 1 / 3 * 100);
+  assert.notEqual(models[1].consumedPercent, 33);
+  assert.equal(models[3].consumedPercent, 100);
+});
+
+test("carries zero consumption for an untouched model, including an inactive premium entry", () => {
+  const { models } = normalizeQuotaPayload({
+    periodStart: "2026-09-01",
+    models: [
+      { model: "glm5.2", tokensUsed: 0, cap: 1000000000, remaining: 1000000000 },
+      { model: "qwen3.8-flash", tokensUsed: 0, cap: 500000000, remaining: 500000000 },
+    ],
+  });
+
+  assert.equal(models[0].consumedPercent, 0);
+  assert.equal(models[0].remainingPercent, 100);
+  assert.equal(models[1].consumedPercent, 0);
+  assert.equal(models[1].remainingPercent, 100);
+});
+
+test("keeps consumedPercent and remainingPercent consistent on a well-formed payload", () => {
+  const { models } = normalizeQuotaPayload(quotaPayload());
+  for (const model of models) {
+    assert.ok(Math.abs(model.consumedPercent + model.remainingPercent - 100) < 1e-9);
+  }
+});
+
+test("falls back to the remaining complement when tokensUsed is missing or unusable", () => {
+  const { models } = normalizeQuotaPayload({
+    periodStart: "2026-09-01",
+    models: [
+      { model: "absent", cap: 1000, remaining: 190 },
+      { model: "null", tokensUsed: null, cap: 1000, remaining: 190 },
+      { model: "string", tokensUsed: "919", cap: 1000, remaining: 190 },
+      { model: "negative", tokensUsed: -1, cap: 1000, remaining: 190 },
+      { model: "nan", tokensUsed: Number.NaN, cap: 1000, remaining: 190 },
+      { model: "infinite", tokensUsed: Number.POSITIVE_INFINITY, cap: 1000, remaining: 190 },
+    ],
+  });
+
+  for (const model of models) {
+    assert.equal(model.tokensUsed, null);
+    assert.equal(model.remainingPercent, 19);
+    assert.ok(Math.abs(model.consumedPercent - 81) < 1e-9);
+  }
+});
+
+test("leaves consumedPercent null when neither route can produce it", () => {
+  const { models } = normalizeQuotaPayload({
+    periodStart: "2026-09-01",
+    models: [
+      { model: "zero-cap", tokensUsed: 0, cap: 0, remaining: 0 },
+      { model: "negative-cap", tokensUsed: 10, cap: -1, remaining: 10 },
+      { model: "no-cap", tokensUsed: 10, remaining: 10 },
+      { model: "string-cap", tokensUsed: 10, cap: "100", remaining: 10 },
+      { model: "nan-cap", tokensUsed: 10, cap: Number.NaN, remaining: 10 },
+      { model: "infinite-cap", tokensUsed: 10, cap: Number.POSITIVE_INFINITY, remaining: 10 },
+    ],
+  });
+
+  for (const model of models) {
+    assert.equal(model.remainingPercent, null);
+    assert.equal(model.consumedPercent, null);
+  }
+});
+
+test("derives consumedPercent even when the remaining value is unusable", () => {
+  const { models } = normalizeQuotaPayload({
+    periodStart: "2026-09-01",
+    models: [
+      { model: "negative-remaining", tokensUsed: 250, cap: 1000, remaining: -1 },
+      { model: "absent-remaining", tokensUsed: 250, cap: 1000 },
+    ],
+  });
+
+  for (const model of models) {
+    assert.equal(model.remainingPercent, null);
+    assert.ok(Math.abs(model.consumedPercent - 25) < 1e-9);
+  }
+});
+
+test("prefers tokensUsed when tokensUsed and remaining disagree", () => {
+  const { models } = normalizeQuotaPayload({
+    periodStart: "2026-09-01",
+    models: [
+      { model: "ahead", tokensUsed: 900, cap: 1000, remaining: 800 },
+      { model: "behind", tokensUsed: 2000, cap: 1000000, remaining: 100000 },
+    ],
+  });
+
+  assert.equal(models[0].remainingPercent, 80);
+  assert.ok(Math.abs(models[0].consumedPercent - 90) < 1e-9);
+  assert.equal(models[1].remainingPercent, 10);
+  assert.ok(Math.abs(models[1].consumedPercent - 0.2) < 1e-9);
 });
 
 test("carries the premium window fields only on the models that have them", () => {
@@ -225,6 +337,7 @@ test("keeps parsePercent exact and unrounded", () => {
   assert.notEqual(parsePercent(919, 1000), 92);
   assert.equal(parsePercent(1, 3), 1 / 3 * 100);
   assert.equal(parsePercent(81000000, 1000000000), 8.1);
+  assert.equal(parsePercent(919000000, 1000000000), 91.9);
 });
 
 test("parsePercent rejects every value it cannot display", () => {

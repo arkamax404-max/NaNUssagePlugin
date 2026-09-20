@@ -1,6 +1,6 @@
 # NaN Usage for Ulanzi D200
 
-Displays the remaining token quota for up to three nan.builders subscription models on a 196×196 D200 key. A key press refreshes immediately; active configured keys also refresh every five minutes.
+Displays the consumed token quota for up to three nan.builders subscription models on a 196×196 D200 key. A key press refreshes immediately; active configured keys also refresh every five minutes.
 
 **Author:** Santiago Pérez
 
@@ -17,7 +17,7 @@ The key requires Ulanzi D200 hardware and Ulanzi Studio 2.1.4 or later. It reads
 
 ## Display
 
-The key shows up to three models. Each row contains the model name, the remaining percentage, and a full-width bar for the remaining quota. Checked models render in the order listed by the Property Inspector; if fewer than three models are checked, the remaining rows are filled automatically from the models with the highest token consumption.
+The key shows up to three models. Each row shows the model name on its own line, and the bar and the percentage underneath it both show how much of that model's quota has been used. The last line of the key shows the day the quota resets. Checked models render in the order listed by the Property Inspector; if fewer than three models are checked, the remaining rows are filled automatically from the models with the highest token consumption.
 
 A warning background is used when any displayed model reaches 10% remaining quota or below. Compact states cover a missing API key, authentication and permission errors, rate limiting, timeout, network failure, malformed responses, and unavailable quota data. Press the key to retry.
 
