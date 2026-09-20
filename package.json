@@ -4,11 +4,13 @@
   "private": true,
   "description": "NaN usage plugin for Ulanzi D200",
   "author": "Santiago Pérez",
+  "license": "MIT",
   "engines": { "node": ">=20" },
   "scripts": {
     "check": "node scripts/check.mjs",
     "test": "node --test test/*.test.js",
     "build": "node scripts/build.mjs",
+    "assets": "node scripts/assets.mjs",
     "package": "npm run check && npm run test && npm run build && node scripts/package.mjs"
   }
 }

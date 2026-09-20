@@ -1,0 +1,7 @@
+# Normalise text to LF in the repository and on checkout. Several modules here
+# are verbatim copies of another project and are compared by digest, so a CRLF
+# checkout would break those comparisons on Windows.
+* text=auto eol=lf
+
+# Raster art must never be line-ending converted.
+*.png binary

@@ -31,9 +31,14 @@ The API key is stored by UlanziStudio with the host-managed per-key settings; th
 
 - `npm run check` validates package metadata, manifest identity, required package files, store metadata, source syntax, and template-residue rules.
 - `npm test` runs the Node.js behavior tests.
-- `npm run build` copies `src/plugin/` into the plugin `dist/` folder and regenerates the PNG assets.
+- `npm run build` copies `src/plugin/` into the plugin `dist/` folder and writes no assets.
+- `npm run assets` creates any missing PNG asset and skips every one that already exists, so authored artwork is never overwritten.
 - `npm run package` runs check, tests, build, and creates the importable ZIP.
 
 ## Package ZIP install flow
 
 After `npm run package`, open UlanziStudio and import `com.ulanzi.nanusage.ulanziPlugin/package/com.ulanzi.nanusage.ulanziPlugin.zip`. Add **NaN Usage** to a D200 key, configure the API key and optional model selection in the Property Inspector, then press the key to force an immediate refresh.
+
+## License
+
+This plugin is released under the MIT License. See [LICENSE](LICENSE) for the full text.

@@ -44,6 +44,14 @@ if (packageMetadata.author !== expectedAuthor || packageLock.packages?.[""]?.aut
   throw new Error(`Package author must be exactly ${expectedAuthor}`);
 if (!readFileSync(new URL("README.md", root), "utf8").includes(`**Author:** ${expectedAuthor}`))
   throw new Error(`README author must be exactly ${expectedAuthor}`);
+if (packageMetadata.license !== "MIT")
+  throw new Error("Package license must be exactly MIT");
+const licenseUrl = new URL("LICENSE", root);
+if (!existsSync(licenseUrl)) throw new Error("Package file is missing: LICENSE");
+if (!readFileSync(licenseUrl, "utf8").includes("MIT License"))
+  throw new Error("LICENSE must contain the MIT License text");
+if (!readFileSync(new URL("README.md", root), "utf8").includes("MIT License"))
+  throw new Error("README must state the MIT License");
 
 const store = parseJson(new URL("store.json", root), "store.json");
 const storeFields = ["cover", "screenshots", "longDescription", "deviceTypes", "tags"];
