@@ -3,7 +3,7 @@
   "Name": "NaN Usage",
   "Description": "Display NaN subscription quota on a Ulanzi D200 key.",
   "Icon": "assets/plugin.png",
-  "Version": "0.1.0",
+  "Version": "0.1.1",
   "Category": "Developer Tools",
   "CategoryIcon": "assets/plugin.png",
   "CodePath": "dist/main.js",
